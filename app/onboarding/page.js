@@ -95,11 +95,11 @@ export default function OnboardingPage() {
       <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
         <div className="card" style={{ width: "100%", maxWidth: 680, padding: 30 }}>
           <div style={{ marginBottom: 20 }}><Brand /></div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: -0.6 }}>Let us build your profile</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: -0.6 }}>Hand me your CV, I will do the rest</h1>
           <p style={{ color: "var(--fg-muted)", fontSize: 14.5, lineHeight: 1.6, margin: "0 0 20px" }}>
-            Paste your CV or LinkedIn. I will read it and pre-fill a form with your work history, education, links,
-            and projects. You review and fix anything, and I can draft each project story for you to approve. Nothing
-            is invented, and nothing a job application needs gets missed.
+            Paste your CV or LinkedIn and I will read it, write your professional summary, decide the senior roles you
+            should be targeting, and build a complete profile for you. You just glance through it and save. Nothing is
+            invented, and nothing a job application needs gets missed.
           </p>
           <textarea
             className="field"
@@ -134,9 +134,9 @@ export default function OnboardingPage() {
           <span className="chip">Review &amp; confirm</span>
         </header>
 
-        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, margin: "0 0 4px" }}>Review your profile</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, margin: "0 0 4px" }}>The profile I built for you</h1>
         <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 18px" }}>
-          I pre-filled what I could read. Fix anything that is off, add what is missing, then save.
+          I read your CV, wrote your summary, and picked the senior roles you should target. Glance through it, tweak anything you want, then save. Only your name, a contact email, and one work entry are required.
         </p>
 
         {missing.length > 0 && (
@@ -218,8 +218,8 @@ export default function OnboardingPage() {
         </Section>
 
         {/* Preferences */}
-        <Section title="What you are looking for">
-          <Tags label="Target roles" value={P.target_roles} onChange={(v) => setProfile({ target_roles: v })} placeholder="CTO, Head of AI, Founding Engineer" />
+        <Section title="What you are looking for" desc="I chose these based on your background. Adjust only if you disagree.">
+          <Tags label="Roles I recommend you target" value={P.target_roles} onChange={(v) => setProfile({ target_roles: v })} placeholder="CTO, Head of AI, Founding Engineer" />
           <Tags label="Acceptable locations / time zones" value={P.acceptable_locations} onChange={(v) => setProfile({ acceptable_locations: v })} placeholder="Remote worldwide, EU, PST overlap" />
           <Row>
             <Text label="Salary floor (optional)" value={P.salary_floor_usd} onChange={(v) => setProfile({ salary_floor_usd: v })} half hint="Leave blank and Job Scout calibrates a realistic ask for each company automatically. Only set this if you want a hard minimum." />
@@ -325,9 +325,6 @@ function computeMissing(draft) {
   const m = [];
   if (!p.full_name?.trim()) m.push("your name");
   if (!p.contact_email?.trim()) m.push("a contact email");
-  if (!(p.target_roles || []).length) m.push("target roles");
-  if (!(p.acceptable_locations || []).length) m.push("acceptable locations");
-  if (!p.visa_status?.trim()) m.push("visa / work-authorization status");
   if (!(draft.employment || []).length) m.push("at least one work-history entry");
   return m;
 }
