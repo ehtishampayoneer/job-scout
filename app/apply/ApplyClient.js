@@ -1,0 +1,340 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Nav } from "@/components/Nav";
+
+const CHANNEL = {
+  "email-apply": { label: "Email apply", cta: "Send application" },
+  "direct-form": { label: "Direct form", cta: "Open form & mark applied" },
+  "login-wall": { label: "Login wall", cta: "Open posting & mark applied" },
+};
+
+export function ApplyClient({ email }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+  const [done, setDone] = useState(false);
+  const [doneInfo, setDoneInfo] = useState(null);
+  const [error, setError] = useState("");
+  const [flash, setFlash] = useState("");
+  const [sending, setSending] = useState(false);
+
+  // Editable fields for the current application.
+  const [note, setNote] = useState("");
+  const [salary, setSalary] = useState("");
+  const [toEmail, setToEmail] = useState("");
+  const [answers, setAnswers] = useState([]);
+
+  const seed = (payload) => {
+    const a = payload.application || {};
+    setNote(a.note_text || "");
+    setSalary(a.salary_ask || "");
+    setToEmail(a.to_email || "");
+    setAnswers(a.answers_json?.answers || []);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/apply/next");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Could not load.");
+      if (payload.done) {
+        setDone(true);
+        setDoneInfo(payload);
+        setData(null);
+      } else {
+        setDone(false);
+        setData(payload);
+        seed(payload);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function send() {
+    if (!data) return;
+    const channel = data.job.apply_channel;
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/apply/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: data.application.id,
+          note_text: note,
+          salary_ask: salary,
+          to_email: toEmail,
+          answers,
+        }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "Could not send.");
+      if (out.handoff && out.url) window.open(out.url, "_blank", "noopener");
+      setFlash(out.sent ? "Sent. Loading the next one…" : "Marked as applied. Loading the next one…");
+      setTimeout(() => setFlash(""), 2500);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function regenerate() {
+    if (!data) return;
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/apply/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: data.job.id }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "Could not regenerate.");
+      setFlash("Fresh draft ready.");
+      setTimeout(() => setFlash(""), 2000);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function skip() {
+    if (!data) return;
+    setSending(true);
+    try {
+      await fetch("/api/apply/skip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: data.job.id }),
+      });
+      await load();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const wrap = { minHeight: "100vh", padding: "22px clamp(12px, 5vw, 48px)" };
+  const inner = { maxWidth: 860, margin: "0 auto" };
+
+  if (loading) {
+    return (
+      <main style={wrap}><div style={inner}><Nav email={email} />
+        <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--fg-muted)" }}>
+          Preparing your next application…
+        </div>
+      </div></main>
+    );
+  }
+
+  if (done) {
+    const noStrong = doneInfo?.reason === "no_strong_matches";
+    return (
+      <main style={wrap}><div style={inner}><Nav email={email} />
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            {noStrong ? "No strong matches to apply to" : "You are all caught up"}
+          </div>
+          <div style={{ color: "var(--fg-muted)", fontSize: 14, lineHeight: 1.6, maxWidth: 470, margin: "0 auto 18px" }}>
+            {noStrong
+              ? `We hold a fixed quality bar (fit ${doneInfo.minFit}+) so you never spray applications, which damages a senior profile. ${doneInfo.weakWaiting} weaker role(s) are parked, not queued. Run the scout for fresh postings, or sharpen your profile so scoring improves.`
+              : "Every strong match has been actioned. Run the scout for fresh roles, then come back to keep applying."}
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <a href="/jobs" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", height: 44 }}>Back to jobs</a>
+            <a href="/profile" className="btn-ghost" style={{ display: "inline-flex", alignItems: "center", height: 44 }}>Sharpen profile</a>
+          </div>
+        </div>
+      </div></main>
+    );
+  }
+
+  const { job, score, application, emailConfigured, remaining, profileLinks } = data;
+  const channel = CHANNEL[job.apply_channel] || CHANNEL["login-wall"];
+  const isEmail = job.apply_channel === "email-apply";
+  const canSend = isEmail ? emailConfigured && toEmail : true;
+
+  return (
+    <main style={wrap}>
+      <div style={inner}>
+        <Nav email={email} />
+
+        {flash && <Banner kind="good" text={flash} />}
+        {error && <Banner kind="bad" text={error} />}
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>Apply</h1>
+          <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{remaining} in your queue</span>
+        </div>
+        <p style={{ color: "var(--fg-muted)", fontSize: 13.5, margin: "0 0 16px" }}>
+          Review the prepared application, edit anything, then send. The next one loads automatically.
+        </p>
+
+        {/* Job header */}
+        <div className="card" style={{ padding: 18, display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 14 }}>
+          <FitBadge score={score.fit_score} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <a href={job.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 17, fontWeight: 700 }}>{job.title} ↗</a>
+            <div style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 2 }}>
+              {[job.company, job.location_type, job.source].filter(Boolean).join(" · ")}
+            </div>
+            {score.why_it_fits && <p style={{ fontSize: 13.5, margin: "8px 0 0", lineHeight: 1.5 }}>{score.why_it_fits}</p>}
+            <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+              <span className="chip">{channel.label}</span>
+              <span className="chip" style={{ color: score.trust_score >= 60 ? "var(--good)" : "var(--warn)" }}>Trust {score.trust_score}</span>
+              {(score.scam_flags || []).map((f, i) => (
+                <span key={i} className="chip" style={{ color: "var(--bad)", borderColor: "#fecaca", background: "#fef2f2" }}>{f}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Salary ask */}
+        <Labeled label="Salary ask (calibrated to this company)">
+          <input className="field" value={salary} onChange={(e) => setSalary(e.target.value)} />
+        </Labeled>
+
+        {/* Recipient for email-apply */}
+        {isEmail && (
+          <Labeled label="Send to">
+            <input className="field" value={toEmail} placeholder="hiring@company.com" onChange={(e) => setToEmail(e.target.value)} />
+            {!emailConfigured && (
+              <div style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 6, lineHeight: 1.5 }}>
+                Email sending is not set up yet. Add RESEND_API_KEY and APPLICATION_FROM_EMAIL to send directly from the app.
+              </div>
+            )}
+          </Labeled>
+        )}
+
+        {/* Outreach note */}
+        <Labeled label="Outreach note">
+          <textarea className="field" style={{ minHeight: 170, lineHeight: 1.6 }} value={note} onChange={(e) => setNote(e.target.value)} />
+        </Labeled>
+
+        {/* Answers */}
+        {answers.length > 0 && (
+          <div className="card" style={{ padding: 18, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Pre-filled answers</div>
+            <div style={{ display: "grid", gap: 12 }}>
+              {answers.map((a, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 4 }}>{a.question}</div>
+                  <textarea
+                    className="field"
+                    style={{ minHeight: 64 }}
+                    value={a.answer}
+                    onChange={(e) => setAnswers(answers.map((x, j) => (j === i ? { ...x, answer: e.target.value } : x)))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Resume preview */}
+        {application.resume_md && (
+          <div className="card" style={{ padding: 18, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Tailored resume</div>
+            <MiniMarkdown text={application.resume_md} />
+          </div>
+        )}
+
+        {(profileLinks || []).length > 0 && (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            {profileLinks.map((l, i) => (
+              <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 600 }}>{l.label} ↗</a>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ position: "sticky", bottom: 0, background: "var(--bg)", padding: "14px 0 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--border)", marginTop: 8 }}>
+          <button className="btn-primary" style={{ height: 48, padding: "0 26px", fontSize: 15 }} onClick={send} disabled={sending || !canSend}>
+            {sending ? "Working…" : channel.cta}
+          </button>
+          <button className="btn-ghost" style={{ height: 48 }} onClick={regenerate} disabled={sending}>Regenerate</button>
+          <button className="btn-ghost" style={{ height: 48 }} onClick={skip} disabled={sending}>Skip</button>
+          {isEmail && !canSend && <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>Add a recipient email to send.</span>}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Labeled({ label, children }) {
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-subtle)", marginBottom: 6 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Banner({ kind, text }) {
+  const c = kind === "good" ? { fg: "var(--good)", bg: "#ecfdf5", bd: "#a7f3d0" } : { fg: "var(--bad)", bg: "#fef2f2", bd: "#fecaca" };
+  return <div style={{ fontSize: 13, color: c.fg, background: c.bg, border: `1px solid ${c.bd}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>{text}</div>;
+}
+
+function FitBadge({ score }) {
+  const color = score >= 80 ? "var(--good)" : score >= 60 ? "var(--warn)" : "var(--fg-subtle)";
+  const bg = score >= 80 ? "#ecfdf5" : score >= 60 ? "#fffbeb" : "var(--surface-2)";
+  return (
+    <div style={{ width: 56, height: 56, borderRadius: 12, background: bg, border: "1px solid var(--border)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+      <div style={{ fontSize: 19, fontWeight: 800, color, lineHeight: 1 }}>{score}</div>
+      <div style={{ fontSize: 9, color: "var(--fg-subtle)", fontWeight: 600, marginTop: 2 }}>FIT</div>
+    </div>
+  );
+}
+
+// Minimal, safe Markdown renderer (headings, bold, bullets) — no HTML injection.
+function MiniMarkdown({ text }) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let list = [];
+  const flush = (key) => {
+    if (list.length) {
+      out.push(<ul key={`ul-${key}`} style={{ margin: "4px 0 8px", paddingLeft: 20 }}>{list}</ul>);
+      list = [];
+    }
+  };
+  lines.forEach((raw, i) => {
+    const l = raw.trimEnd();
+    if (/^#{1,6}\s/.test(l)) {
+      flush(i);
+      const level = l.match(/^#+/)[0].length;
+      const t = l.replace(/^#+\s/, "");
+      out.push(
+        <div key={i} style={{ fontSize: level <= 1 ? 16 : 13.5, fontWeight: 700, margin: level <= 1 ? "2px 0 6px" : "10px 0 4px" }}>{inline(t)}</div>
+      );
+    } else if (/^[-*]\s/.test(l)) {
+      list.push(<li key={i} style={{ fontSize: 13, lineHeight: 1.5 }}>{inline(l.replace(/^[-*]\s/, ""))}</li>);
+    } else if (!l.trim()) {
+      flush(i);
+    } else {
+      flush(i);
+      out.push(<p key={i} style={{ fontSize: 13, lineHeight: 1.55, margin: "0 0 6px" }}>{inline(l)}</p>);
+    }
+  });
+  flush("end");
+  return <div>{out}</div>;
+}
+
+function inline(s) {
+  // Bold **text** only; everything else literal.
+  const parts = String(s).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    /^\*\*[^*]+\*\*$/.test(p) ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>
+  );
+}
