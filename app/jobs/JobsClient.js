@@ -106,11 +106,29 @@ export function JobsClient({ initialRows }) {
   );
 }
 
+function whenFound(ts) {
+  if (!ts) return "";
+  const days = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+  if (days <= 0) return "found today";
+  if (days === 1) return "found 1 day ago";
+  return `found ${days} days ago`;
+}
+// Flag roles that look region-restricted (US-only etc.) — matters when applying from abroad.
+function regionNote(loc) {
+  const l = String(loc || "").toLowerCase();
+  if (/worldwide|anywhere|global/.test(l)) return { text: "Remote worldwide", good: true };
+  if (/\b(us|u\.s\.|usa|united states|us[- ]only|americas|north america)\b/.test(l)) return { text: "US-region only", good: false };
+  if (/\b(eu|europe|emea|uk|united kingdom)\b/.test(l)) return { text: "Europe-region", good: false };
+  return null;
+}
+
 function JobCard({ row }) {
   const job = row.jobs || {};
   const fit = row.fit_score ?? 0;
   const trust = row.trust_score ?? 0;
   const flags = Array.isArray(row.scam_flags) ? row.scam_flags : [];
+  const region = regionNote(job.location_raw);
+  const found = whenFound(job.first_seen);
 
   return (
     <div className="card" style={{ padding: 18, display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -122,13 +140,18 @@ function JobCard({ row }) {
           </a>
         </div>
         <div style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 2 }}>
-          {[job.company, job.location_type, job.source].filter(Boolean).join(" · ")}
+          {[job.company, job.location_raw || job.location_type, job.source, found].filter(Boolean).join(" · ")}
         </div>
         {row.why_it_fits && (
           <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: "9px 0 0", color: "var(--fg)" }}>{row.why_it_fits}</p>
         )}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 11, alignItems: "center" }}>
           {job.apply_channel && <span className="chip">{CHANNEL_LABEL[job.apply_channel] || job.apply_channel}</span>}
+          {region && (
+            <span className="chip" title="Where this role can hire" style={{ color: region.good ? "var(--good)" : "var(--warn)" }}>
+              {region.text}
+            </span>
+          )}
           <span className="chip" title="How legitimate the company/posting looks" style={{ color: trust >= 60 ? "var(--good)" : trust >= 40 ? "var(--warn)" : "var(--bad)" }}>
             Trust {trust}
           </span>

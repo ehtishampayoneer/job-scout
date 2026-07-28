@@ -115,6 +115,7 @@ create table if not exists public.jobs (
   raw_text      text,
   salary_range  text,
   location_type text,                       -- remote-worldwide | visa | onsite | ...
+  location_raw  text,                       -- the raw location string (e.g. "Remote, US")
   apply_channel text,                       -- email-apply | direct-form | login-wall
   first_seen    timestamptz default now(),  -- being early matters
   created_at    timestamptz default now(),

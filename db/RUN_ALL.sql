@@ -73,3 +73,6 @@ create index if not exists interviews_user_idx on public.interviews (user_id, sc
 alter table public.interviews enable row level security;
 drop policy if exists interviews_owner on public.interviews;
 create policy interviews_owner on public.interviews for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 008: raw location on jobs (show the actual country/region)
+alter table public.jobs add column if not exists location_raw text;
