@@ -28,3 +28,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Local secret notes — never commit
+Keys.txt
+keys.txt
+secrets.txt
+*.secret

@@ -77,6 +77,13 @@ export default function OnboardingPage() {
     await chat([], seed);
   }
 
+  async function retry() {
+    if (busy) return;
+    // Re-run the last turn: the opening (no messages) reseeds from the draft,
+    // otherwise re-send the existing transcript.
+    await chat(messages, messages.length === 0 ? draft : undefined);
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
@@ -168,7 +175,12 @@ export default function OnboardingPage() {
             <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
               {messages.map((m, i) => <Bubble key={i} role={m.role} text={m.content} />)}
               {busy && <Bubble role="assistant" text="…" typing />}
-              {error && <ErrorNote text={error} />}
+              {error && (
+                <div style={{ display: "grid", gap: 8, justifyItems: "start" }}>
+                  <ErrorNote text={error} />
+                  <button className="btn-primary" style={{ height: 38 }} onClick={retry} disabled={busy}>Retry</button>
+                </div>
+              )}
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", padding: 14 }}>
