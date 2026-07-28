@@ -24,6 +24,7 @@ export default function OnboardingPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [assessment, setAssessment] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef(null);
@@ -45,6 +46,7 @@ export default function OnboardingPage() {
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
       setMessages([...nextMessages, { role: "assistant", content: data.reply }]);
       if (data.draft) setDraft(data.draft);
+      if (data.assessment) setAssessment(data.assessment);
       setComplete(Boolean(data.complete));
     } catch (e) {
       setError(e.message);
@@ -209,7 +211,26 @@ export default function OnboardingPage() {
             </div>
           </section>
 
-          <aside style={{ position: "sticky", top: 20 }}>
+          <aside style={{ position: "sticky", top: 20, display: "grid", gap: 12 }}>
+            {assessment && assessment.score != null && (
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: "var(--fg-subtle)" }}>Profile strength</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: assessment.score >= 85 ? "var(--good)" : assessment.score >= 60 ? "var(--warn)" : "var(--fg)" }}>{assessment.score}<span style={{ fontSize: 12, color: "var(--fg-subtle)", fontWeight: 600 }}>/100</span></span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
+                  <div style={{ width: `${assessment.score}%`, height: "100%", background: assessment.score >= 85 ? "var(--good)" : assessment.score >= 60 ? "var(--warn)" : "var(--accent)" }} />
+                </div>
+                {assessment.gaps?.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--fg-subtle)", marginBottom: 6 }}>I still want to strengthen</div>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {assessment.gaps.map((g, i) => <li key={i} style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--fg-muted)" }}>{g}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             <DraftPreview draft={draft} />
           </aside>
         </div>
