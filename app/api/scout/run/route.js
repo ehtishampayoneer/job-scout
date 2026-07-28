@@ -10,7 +10,7 @@ import { logger } from "@/lib/log";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-export async function POST() {
+export async function POST(request) {
   const supabase = createClient();
   const {
     data: { user },
@@ -18,8 +18,21 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasAnyProvider()) return NextResponse.json({ error: "No LLM key configured." }, { status: 503 });
 
+  const body = await request.json().catch(() => ({}));
+
   try {
-    const result = await runScoutForUser(user.id, supabase, { maxScore: 12 });
+    // Fresh rescan: clear stale, un-actioned matches so the list rebuilds clean
+    // with the current sources/filter/scoring. Jobs you already applied to are kept.
+    if (body.fresh) {
+      const { data: apps } = await supabase.from("applications").select("job_id").eq("user_id", user.id);
+      const keep = (apps || []).map((a) => a.job_id).filter(Boolean);
+      await supabase.from("job_scores").delete().eq("user_id", user.id);
+      let del = supabase.from("jobs").delete().eq("user_id", user.id);
+      if (keep.length) del = del.not("id", "in", `(${keep.join(",")})`);
+      await del;
+    }
+
+    const result = await runScoutForUser(user.id, supabase, { maxScore: 14 });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     logger.error("scout.run_failed", { error: String(err?.message || err) });

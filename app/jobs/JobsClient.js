@@ -18,17 +18,21 @@ export function JobsClient({ initialRows }) {
   const [note, setNote] = useState("");
   const [minFit, setMinFit] = useState(0);
 
-  async function runScout() {
+  async function runScout(fresh = false) {
     setBusy(true);
-    setNote("Scanning job boards and scoring matches…");
+    setNote(fresh ? "Clearing old matches and rescanning 50+ boards…" : "Scanning job boards and scoring matches…");
     try {
-      const res = await fetch("/api/scout/run", { method: "POST" });
+      const res = await fetch("/api/scout/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fresh }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Scout failed.");
       setNote(
         data.survivors === 0
-          ? "No new senior remote roles matched right now. Try again later."
-          : `Scanned ${data.fetched} postings, ${data.survivors} passed filters, scored ${data.scored} new. Refreshing…`
+          ? "No senior remote roles matched right now. Try again later."
+          : `Scanned ${data.fetched} postings, ${data.survivors} passed filters, scored ${data.scored} (ranked by ${data.ranker || "fit"}). Refreshing…`
       );
       router.refresh();
     } catch (e) {
@@ -48,7 +52,10 @@ export function JobsClient({ initialRows }) {
           <nav style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
             <Link href="/apply" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Apply</Link>
-            <button className="btn-primary" style={{ height: 38 }} onClick={runScout} disabled={busy}>
+            <button className="btn-ghost" style={{ height: 38 }} onClick={() => runScout(true)} disabled={busy} title="Wipe stale matches and rescan all sources fresh">
+              Clear &amp; rescan
+            </button>
+            <button className="btn-primary" style={{ height: 38 }} onClick={() => runScout(false)} disabled={busy}>
               {busy ? "Scouting…" : "Run scout now"}
             </button>
           </nav>
