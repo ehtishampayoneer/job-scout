@@ -33,7 +33,7 @@ export async function GET(request) {
 
   // Anti-spray: only surface genuinely strong matches in the apply queue.
   // The fit bar is fixed; volume floats (spec rule 7). Tunable via env.
-  const MIN_FIT = parseInt(process.env.APPLY_MIN_FIT, 10) || 70;
+  const MIN_FIT = parseInt(process.env.APPLY_MIN_FIT, 10) || 65;
 
   const appByJob = new Map((apps || []).map((a) => [a.job_id, a]));
   const actionable = (scores || []).filter((s) => {
