@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Brand } from "@/components/Brand";
+import { readJson } from "@/lib/readJson";
 
 const CHANNEL_LABEL = {
   "email-apply": "Email apply",
@@ -27,7 +28,7 @@ export function JobsClient({ initialRows }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fresh }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Scout failed.");
       setNote(
         data.survivors === 0

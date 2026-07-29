@@ -8,7 +8,11 @@ import { hasAnyProvider } from "@/lib/ai-router";
 import { logger } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Vercel's Hobby plan hard-caps function execution at 60s (a higher value is
+// silently clamped, then the platform kills the function and returns a non-JSON
+// error page). The run is engineered to finish well under this: parallel LLM
+// scoring, a bounded embedding pool, and parallel source fetches.
+export const maxDuration = 60;
 
 export async function POST(request) {
   const supabase = createClient();

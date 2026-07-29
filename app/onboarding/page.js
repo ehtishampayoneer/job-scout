@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brand } from "@/components/Brand";
 import { DraftPreview } from "@/components/DraftPreview";
+import { readJson } from "@/lib/readJson";
 
 const EMPTY_DRAFT = {
   profile: {
@@ -42,7 +43,7 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cvText, messages: nextMessages, draft: seedDraft ?? draft }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
       setMessages([...nextMessages, { role: "assistant", content: data.reply }]);
       if (data.draft) setDraft(data.draft);
@@ -67,7 +68,7 @@ export default function OnboardingPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cvText }),
         });
-        const data = await res.json();
+        const data = await readJson(res);
         if (data.draft) {
           seed = { ...EMPTY_DRAFT, ...data.draft, profile: { ...EMPTY_DRAFT.profile, ...data.draft.profile } };
           setDraft(seed);
@@ -98,7 +99,7 @@ export default function OnboardingPage() {
   async function loadExample() {
     try {
       const res = await fetch("/api/onboarding/example");
-      const data = await res.json();
+      const data = await readJson(res);
       setCvText(data.cv || "");
     } catch {
       setError("Could not load the example.");
@@ -114,7 +115,7 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ draft, cvText }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Could not save.");
       router.replace("/profile");
       router.refresh();
