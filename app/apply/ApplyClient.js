@@ -36,7 +36,10 @@ export function ApplyClient({ email }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/apply/next");
+      // If the user came from a specific job card (/apply?job=<id>), focus that
+      // job; otherwise pull the next best from the queue.
+      const jobParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("job") : null;
+      const res = await fetch(`/api/apply/next${jobParam ? `?job=${encodeURIComponent(jobParam)}` : ""}`);
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || "Could not load.");
       if (payload.done) {
@@ -243,10 +246,19 @@ export function ApplyClient({ email }) {
           </div>
         )}
 
-        {/* Resume preview */}
+        {/* Resume preview + tailored Word download */}
         {application.resume_md && (
           <div className="card" style={{ padding: 18, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Tailored resume</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Tailored resume (specific to this job)</div>
+              <a
+                href={`/api/apply/resume?jobId=${job.id}`}
+                className="btn-ghost"
+                style={{ height: 34, display: "inline-flex", alignItems: "center", padding: "0 14px", fontSize: 12.5, fontWeight: 600 }}
+              >
+                Download .docx
+              </a>
+            </div>
             <MiniMarkdown text={application.resume_md} />
           </div>
         )}

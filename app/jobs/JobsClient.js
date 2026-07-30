@@ -167,6 +167,15 @@ function JobCard({ row }) {
             <span key={i} className="chip" style={{ color: "var(--bad)", borderColor: "#fecaca", background: "#fef2f2" }}>{f}</span>
           ))}
         </div>
+        <div style={{ marginTop: 13 }}>
+          <Link
+            href={`/apply?job=${job.id}`}
+            className="btn-primary"
+            style={{ height: 36, display: "inline-flex", alignItems: "center", padding: "0 16px", fontSize: 13.5, fontWeight: 600 }}
+          >
+            Apply with copilot →
+          </Link>
+        </div>
       </div>
     </div>
   );

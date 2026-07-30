@@ -22,6 +22,7 @@ export async function GET(request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const origin = process.env.APP_URL || new URL(request.url).origin;
+  const targetJobId = new URL(request.url).searchParams.get("job");
 
   const { profile, projects, employment, education } = await loadCandidate(supabase, user.id);
   if (!profile?.onboarding_complete) return NextResponse.json({ error: "Complete onboarding first." }, { status: 400 });
@@ -42,20 +43,37 @@ export async function GET(request) {
   });
   const queue = actionable.filter((s) => (s.fit_score ?? 0) >= MIN_FIT);
 
-  if (!queue.length) {
-    // Distinguish "nothing left" from "nothing strong enough to be worth applying".
-    const weakWaiting = actionable.length;
-    return NextResponse.json({
-      done: true,
-      remaining: 0,
-      minFit: MIN_FIT,
-      weakWaiting,
-      reason: weakWaiting ? "no_strong_matches" : "caught_up",
-      emailConfigured: emailConfigured(),
-    });
+  let top;
+  if (targetJobId) {
+    // The user picked THIS job from the list — apply to it regardless of the fit
+    // bar (an explicit choice overrides the anti-spray queue gate).
+    top = (scores || []).find((s) => s.job_id === targetJobId && s.jobs);
+    if (!top) {
+      const { data: s } = await supabase
+        .from("job_scores")
+        .select("*, jobs(*)")
+        .eq("user_id", user.id)
+        .eq("job_id", targetJobId)
+        .maybeSingle();
+      if (s?.jobs) top = s;
+    }
+    if (!top) return NextResponse.json({ error: "That job is not in your matches. Run the scout first." }, { status: 404 });
+  } else {
+    if (!queue.length) {
+      // Distinguish "nothing left" from "nothing strong enough to be worth applying".
+      const weakWaiting = actionable.length;
+      return NextResponse.json({
+        done: true,
+        remaining: 0,
+        minFit: MIN_FIT,
+        weakWaiting,
+        reason: weakWaiting ? "no_strong_matches" : "caught_up",
+        emailConfigured: emailConfigured(),
+      });
+    }
+    top = queue[0];
   }
 
-  const top = queue[0];
   const job = top.jobs;
   let application = appByJob.get(top.job_id) || null;
 
