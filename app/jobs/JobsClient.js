@@ -12,7 +12,9 @@ const CHANNEL_LABEL = {
   "login-wall": "Login wall",
 };
 
-export function JobsClient({ initialRows }) {
+const APPLIED_STATUSES = ["sent", "responded", "interviewing", "rejected", "offer"];
+
+export function JobsClient({ initialRows, statusByJob = {} }) {
   const router = useRouter();
   const [rows] = useState(initialRows);
   const [busy, setBusy] = useState(false);
@@ -109,7 +111,7 @@ export function JobsClient({ initialRows }) {
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {visible.map((r) => (
-              <JobCard key={r.id} row={r} />
+              <JobCard key={r.id} row={r} status={statusByJob[r.job_id]} />
             ))}
           </div>
         )}
@@ -134,13 +136,15 @@ function regionNote(loc) {
   return null;
 }
 
-function JobCard({ row }) {
+function JobCard({ row, status }) {
   const job = row.jobs || {};
   const fit = row.fit_score ?? 0;
   const trust = row.trust_score ?? 0;
   const flags = Array.isArray(row.scam_flags) ? row.scam_flags : [];
   const region = regionNote(job.location_raw);
   const found = whenFound(job.first_seen);
+  const applied = APPLIED_STATUSES.includes(status);
+  const dismissed = status === "dismissed";
 
   return (
     <div className="card" style={{ padding: 18, display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -171,14 +175,22 @@ function JobCard({ row }) {
             <span key={i} className="chip" style={{ color: "var(--bad)", borderColor: "#fecaca", background: "#fef2f2" }}>{f}</span>
           ))}
         </div>
-        <div style={{ marginTop: 13 }}>
-          <Link
-            href={`/apply?job=${job.id}`}
-            className="btn-primary"
-            style={{ height: 36, display: "inline-flex", alignItems: "center", padding: "0 16px", fontSize: 13.5, fontWeight: 600 }}
-          >
-            Apply with copilot →
-          </Link>
+        <div style={{ marginTop: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {applied ? (
+            <>
+              <span className="chip" style={{ color: "var(--good)", borderColor: "#a7f3d0", background: "#ecfdf5", fontWeight: 600 }}>✓ Applied</span>
+              <Link href={`/apply?job=${job.id}`} style={{ fontSize: 12.5, color: "var(--fg-muted)", fontWeight: 600 }}>View application →</Link>
+            </>
+          ) : (
+            <Link
+              href={`/apply?job=${job.id}`}
+              className="btn-primary"
+              style={{ height: 36, display: "inline-flex", alignItems: "center", padding: "0 16px", fontSize: 13.5, fontWeight: 600 }}
+            >
+              Apply with copilot →
+            </Link>
+          )}
+          {dismissed && <span className="chip" style={{ color: "var(--fg-subtle)" }}>Skipped</span>}
         </div>
       </div>
     </div>

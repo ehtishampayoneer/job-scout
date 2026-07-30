@@ -83,8 +83,13 @@ export function ApplyClient({ email }) {
       const out = await readJson(res);
       if (!res.ok) throw new Error(out.error || "Could not send.");
       if (out.handoff && out.url) window.open(out.url, "_blank", "noopener");
-      setFlash(out.sent ? "Sent. Loading the next one…" : "Marked as applied. Loading the next one…");
-      setTimeout(() => setFlash(""), 2500);
+      setFlash(out.sent ? "Sent. Loading the next one…" : "Marked as applied. Opening the form and loading the next one…");
+      setTimeout(() => setFlash(""), 3000);
+      // Drop any ?job focus so the next load advances through the queue instead
+      // of re-showing the job we just actioned.
+      if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("job")) {
+        window.history.replaceState({}, "", "/apply");
+      }
       await load();
     } catch (e) {
       setError(e.message);

@@ -44,22 +44,28 @@ export async function GET(request) {
   });
   const queue = actionable.filter((s) => (s.fit_score ?? 0) >= MIN_FIT);
 
-  let top;
+  let top = null;
   if (targetJobId) {
     // The user picked THIS job from the list — apply to it regardless of the fit
-    // bar (an explicit choice overrides the anti-spray queue gate).
-    top = (scores || []).find((s) => s.job_id === targetJobId && s.jobs);
-    if (!top) {
-      const { data: s } = await supabase
-        .from("job_scores")
-        .select("*, jobs(*)")
-        .eq("user_id", user.id)
-        .eq("job_id", targetJobId)
-        .maybeSingle();
-      if (s?.jobs) top = s;
+    // bar (an explicit choice overrides the anti-spray queue gate). BUT if it was
+    // already actioned (applied/skipped), don't re-surface it — fall through to
+    // the queue so the flow advances instead of looping on the same job.
+    const ex = appByJob.get(targetJobId);
+    const actioned = ex && TERMINAL_STATUSES.includes(ex.status);
+    if (!actioned) {
+      top = (scores || []).find((s) => s.job_id === targetJobId && s.jobs);
+      if (!top) {
+        const { data: s } = await supabase
+          .from("job_scores")
+          .select("*, jobs(*)")
+          .eq("user_id", user.id)
+          .eq("job_id", targetJobId)
+          .maybeSingle();
+        if (s?.jobs) top = s;
+      }
     }
-    if (!top) return NextResponse.json({ error: "That job is not in your matches. Run the scout first." }, { status: 404 });
-  } else {
+  }
+  if (!top) {
     if (!queue.length) {
       // Distinguish "nothing left" from "nothing strong enough to be worth applying".
       const weakWaiting = actionable.length;

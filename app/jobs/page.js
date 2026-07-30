@@ -25,12 +25,18 @@ export default async function JobsPage() {
     .maybeSingle();
   if (!profile?.onboarding_complete) redirect("/onboarding");
 
-  const { data: rows } = await supabase
-    .from("job_scores")
-    .select("*, jobs(*)")
-    .eq("user_id", user.id)
-    .order("fit_score", { ascending: false })
-    .limit(200);
+  const [{ data: rows }, { data: apps }] = await Promise.all([
+    supabase
+      .from("job_scores")
+      .select("*, jobs(*)")
+      .eq("user_id", user.id)
+      .order("fit_score", { ascending: false })
+      .limit(200),
+    supabase.from("applications").select("job_id, status").eq("user_id", user.id),
+  ]);
 
-  return <JobsClient initialRows={rows || []} />;
+  const statusByJob = {};
+  for (const a of apps || []) statusByJob[a.job_id] = a.status;
+
+  return <JobsClient initialRows={rows || []} statusByJob={statusByJob} />;
 }
