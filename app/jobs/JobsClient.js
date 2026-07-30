@@ -20,13 +20,17 @@ export function JobsClient({ initialRows }) {
   const [minFit, setMinFit] = useState(0);
 
   async function runScout(fresh = false) {
+    // Coerce to a real boolean: if a button is ever wired as onClick={runScout},
+    // `fresh` would be a click Event, and JSON.stringify would throw on the DOM
+    // node's circular references. This guarantees we only ever send true/false.
+    const isFresh = fresh === true;
     setBusy(true);
-    setNote(fresh ? "Clearing old matches and rescanning 50+ boards…" : "Scanning job boards and scoring matches…");
+    setNote(isFresh ? "Clearing old matches and rescanning 50+ boards…" : "Scanning job boards and scoring matches…");
     try {
       const res = await fetch("/api/scout/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fresh }),
+        body: JSON.stringify({ fresh: isFresh }),
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Scout failed.");
@@ -97,7 +101,7 @@ export function JobsClient({ initialRows }) {
                 : "Lower the minimum fit filter, or run the scout again for fresh postings."}
             </div>
             {rows.length === 0 && (
-              <button className="btn-primary" onClick={runScout} disabled={busy}>
+              <button className="btn-primary" onClick={() => runScout(false)} disabled={busy}>
                 {busy ? "Scouting…" : "Run scout now"}
               </button>
             )}
