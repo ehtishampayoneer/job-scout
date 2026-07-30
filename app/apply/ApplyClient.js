@@ -25,12 +25,19 @@ export function ApplyClient({ email }) {
   const [toEmail, setToEmail] = useState("");
   const [answers, setAnswers] = useState([]);
 
+  // Per-application assistant: draft answers to any extra questions a form asks.
+  const [askQ, setAskQ] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [asked, setAsked] = useState([]);
+
   const seed = (payload) => {
     const a = payload.application || {};
     setNote(a.note_text || "");
     setSalary(a.salary_ask || "");
     setToEmail(a.to_email || "");
     setAnswers(a.answers_json?.answers || []);
+    setAsked([]);
+    setAskQ("");
   };
 
   const load = useCallback(async () => {
@@ -132,6 +139,28 @@ export function ApplyClient({ email }) {
       await load();
     } finally {
       setSending(false);
+    }
+  }
+
+  async function askQuestion() {
+    const q = askQ.trim();
+    if (!q || !data) return;
+    setAsking(true);
+    setError("");
+    try {
+      const res = await fetch("/api/apply/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: data.job.id, question: q }),
+      });
+      const out = await readJson(res);
+      if (!res.ok) throw new Error(out.error || "Could not draft an answer.");
+      setAsked((prev) => [...prev, { q, a: out.answer }]);
+      setAskQ("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAsking(false);
     }
   }
 
@@ -288,6 +317,39 @@ export function ApplyClient({ email }) {
             <MiniMarkdown text={application.resume_md} />
           </div>
         )}
+
+        {/* Per-application assistant: draft an answer to any other form question */}
+        <div className="card" style={{ padding: 18, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Answer any other question this form asks</div>
+          <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+            Paste a question from {job.company || "the company"}&apos;s form. I&apos;ll draft an honest answer using this role, the company, and your profile — ready to paste.
+          </div>
+
+          {asked.map((qa, i) => (
+            <div key={i} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 5 }}>{qa.q}</div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>{qa.a}</div>
+              <button
+                className="btn-ghost"
+                style={{ height: 30, marginTop: 6, fontSize: 12 }}
+                onClick={() => { try { navigator.clipboard?.writeText(qa.a); setFlash("Copied."); setTimeout(() => setFlash(""), 1500); } catch {} }}
+              >
+                Copy
+              </button>
+            </div>
+          ))}
+
+          <textarea
+            className="field"
+            style={{ minHeight: 70, lineHeight: 1.5 }}
+            placeholder="e.g. Why do you want to work here? · Are you authorized to work in this country? · What's your biggest achievement?"
+            value={askQ}
+            onChange={(e) => setAskQ(e.target.value)}
+          />
+          <button className="btn-primary" style={{ height: 38, marginTop: 8, fontSize: 13.5 }} onClick={askQuestion} disabled={asking || !askQ.trim()}>
+            {asking ? "Drafting…" : "Draft answer"}
+          </button>
+        </div>
 
         {(profileLinks || []).length > 0 && (
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
