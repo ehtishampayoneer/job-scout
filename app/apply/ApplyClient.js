@@ -223,6 +223,8 @@ export function ApplyClient({ email }) {
   const channel = CHANNEL[job.apply_channel] || CHANNEL["login-wall"];
   const isEmail = job.apply_channel === "email-apply";
   const canSend = isEmail ? emailConfigured && toEmail : true;
+  const APPLIED = ["sent", "responded", "interviewing", "rejected", "offer"];
+  const alreadyApplied = APPLIED.includes(application?.status);
 
   return (
     <main style={wrap}>
@@ -231,6 +233,11 @@ export function ApplyClient({ email }) {
 
         {flash && <Banner kind="good" text={flash} />}
         {error && <Banner kind="bad" text={error} />}
+        {alreadyApplied && (
+          <div style={{ fontSize: 13, color: "var(--good)", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 10, padding: "10px 12px", marginBottom: 12, lineHeight: 1.5 }}>
+            ✓ You already applied to this role. You&apos;re reviewing your submitted application — re-open the form below to finish it, or use the assistant for any remaining questions.
+          </div>
+        )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>Apply</h1>
@@ -361,12 +368,27 @@ export function ApplyClient({ email }) {
 
         {/* Actions */}
         <div style={{ position: "sticky", bottom: 0, background: "var(--bg)", padding: "14px 0 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--border)", marginTop: 8 }}>
-          <button className="btn-primary" style={{ height: 48, padding: "0 26px", fontSize: 15 }} onClick={send} disabled={sending || !canSend}>
-            {sending ? "Working…" : channel.cta}
-          </button>
-          <button className="btn-ghost" style={{ height: 48 }} onClick={regenerate} disabled={sending}>Regenerate</button>
-          <button className="btn-ghost" style={{ height: 48 }} onClick={skip} disabled={sending}>Skip</button>
-          {isEmail && !canSend && <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>Add a recipient email to send.</span>}
+          {alreadyApplied ? (
+            <>
+              {/* Already applied: let them re-open the form to finish, WITHOUT
+                  re-marking or advancing the queue. */}
+              {!isEmail && job.url && (
+                <a href={job.url} target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ height: 48, padding: "0 26px", fontSize: 15, display: "inline-flex", alignItems: "center" }}>
+                  Re-open form ↗
+                </a>
+              )}
+              <a href="/jobs" className="btn-ghost" style={{ height: 48, display: "inline-flex", alignItems: "center" }}>Back to jobs</a>
+            </>
+          ) : (
+            <>
+              <button className="btn-primary" style={{ height: 48, padding: "0 26px", fontSize: 15 }} onClick={send} disabled={sending || !canSend}>
+                {sending ? "Working…" : channel.cta}
+              </button>
+              <button className="btn-ghost" style={{ height: 48 }} onClick={regenerate} disabled={sending}>Regenerate</button>
+              <button className="btn-ghost" style={{ height: 48 }} onClick={skip} disabled={sending}>Skip</button>
+              {isEmail && !canSend && <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>Add a recipient email to send.</span>}
+            </>
+          )}
         </div>
       </div>
     </main>
