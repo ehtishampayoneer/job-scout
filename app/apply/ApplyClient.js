@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
+import { readJson } from "@/lib/readJson";
 
 const CHANNEL = {
   "email-apply": { label: "Email apply", cta: "Send application" },
@@ -40,7 +41,7 @@ export function ApplyClient({ email }) {
       // job; otherwise pull the next best from the queue.
       const jobParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("job") : null;
       const res = await fetch(`/api/apply/next${jobParam ? `?job=${encodeURIComponent(jobParam)}` : ""}`);
-      const payload = await res.json();
+      const payload = await readJson(res);
       if (!res.ok) throw new Error(payload.error || "Could not load.");
       if (payload.done) {
         setDone(true);
@@ -79,7 +80,7 @@ export function ApplyClient({ email }) {
           answers,
         }),
       });
-      const out = await res.json();
+      const out = await readJson(res);
       if (!res.ok) throw new Error(out.error || "Could not send.");
       if (out.handoff && out.url) window.open(out.url, "_blank", "noopener");
       setFlash(out.sent ? "Sent. Loading the next one…" : "Marked as applied. Loading the next one…");
@@ -102,7 +103,7 @@ export function ApplyClient({ email }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId: data.job.id }),
       });
-      const out = await res.json();
+      const out = await readJson(res);
       if (!res.ok) throw new Error(out.error || "Could not regenerate.");
       setFlash("Fresh draft ready.");
       setTimeout(() => setFlash(""), 2000);
@@ -158,6 +159,26 @@ export function ApplyClient({ email }) {
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/jobs" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", height: 44 }}>Back to jobs</a>
             <a href="/profile" className="btn-ghost" style={{ display: "inline-flex", alignItems: "center", height: 44 }}>Sharpen profile</a>
+          </div>
+        </div>
+      </div></main>
+    );
+  }
+
+  // After an error (e.g. the generator timed out) we have no data — show a clean
+  // retry instead of crashing on a null destructure.
+  if (!data) {
+    return (
+      <main style={wrap}><div style={inner}><Nav email={email} />
+        {error && <Banner kind="bad" text={error} />}
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Could not prepare this application</div>
+          <div style={{ color: "var(--fg-muted)", fontSize: 14, lineHeight: 1.6, maxWidth: 460, margin: "0 auto 18px" }}>
+            {error || "The tailoring step took too long or hit a snag. This usually works on a second try."}
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="btn-primary" style={{ height: 44 }} onClick={load} disabled={loading}>Try again</button>
+            <a href="/jobs" className="btn-ghost" style={{ display: "inline-flex", alignItems: "center", height: 44 }}>Back to jobs</a>
           </div>
         </div>
       </div></main>

@@ -13,7 +13,8 @@ import { emailConfigured } from "@/lib/email/resend";
 import { logger } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+// Hobby caps at 60s anyway; be explicit so we design generation to fit under it.
+export const maxDuration = 60;
 
 export async function GET(request) {
   const supabase = createClient();
