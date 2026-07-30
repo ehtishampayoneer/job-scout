@@ -36,7 +36,7 @@ export async function POST(request) {
       await del;
     }
 
-    const result = await runScoutForUser(user.id, supabase, { maxScore: 20 });
+    const result = await runScoutForUser(user.id, supabase, { maxScore: 24 });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     logger.error("scout.run_failed", { error: String(err?.message || err) });
