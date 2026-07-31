@@ -6,6 +6,8 @@ import { Brand } from "@/components/Brand";
 import { DraftPreview } from "@/components/DraftPreview";
 import { readJson } from "@/lib/readJson";
 
+const STORAGE_KEY = "jobscout_onboarding_v1";
+
 const EMPTY_DRAFT = {
   profile: {
     full_name: "", headline: "", location: "", contact_email: "", contact_phone: "",
@@ -33,6 +35,36 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, busy]);
+
+  // Persist onboarding progress locally so an interruption (a phone call, a tab
+  // switch, an accidental refresh) never wipes the conversation. Restored on
+  // mount; cleared only when onboarding is saved/completed.
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.phase) setPhase(s.phase);
+        if (typeof s.cvText === "string") setCvText(s.cvText);
+        if (Array.isArray(s.messages)) setMessages(s.messages);
+        if (s.draft) setDraft(s.draft);
+        if (s.assessment) setAssessment(s.assessment);
+        if (typeof s.complete === "boolean") setComplete(s.complete);
+      }
+    } catch {
+      /* ignore corrupt/absent storage */
+    }
+    restored.current = true;
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return; // don't overwrite saved state before restoring
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ phase, cvText, messages, draft, assessment, complete }));
+    } catch {
+      /* storage full / unavailable — non-fatal */
+    }
+  }, [phase, cvText, messages, draft, assessment, complete]);
 
   async function chat(nextMessages, seedDraft) {
     setBusy(true);
@@ -117,6 +149,7 @@ export default function OnboardingPage() {
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Could not save.");
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* non-fatal */ }
       router.replace("/profile");
       router.refresh();
     } catch (e) {
