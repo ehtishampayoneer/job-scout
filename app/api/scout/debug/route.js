@@ -53,7 +53,7 @@ export async function GET() {
     return s;
   };
   survivors.sort((a, b) => rel(b) - rel(a));
-  const toScore = survivors.slice(0, 45);
+  const toScore = survivors.slice(0, 36);
 
   const brief = [
     profile.headline && `Headline: ${profile.headline}`,
@@ -64,8 +64,18 @@ export async function GET() {
     profile.acceptable_locations?.length && `Acceptable locations: ${profile.acceptable_locations.join(", ")}`,
   ].filter(Boolean).join("\n");
 
-  const settled = await Promise.allSettled(toScore.map((j) => scoreJob(j, brief).then((s) => ({ j, s }))));
-  const scored = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  // Score in small chunks to respect free-tier LLM rate limits (firing all at
+  // once got every call 429'd).
+  const scored = [];
+  let firstError = null;
+  for (let i = 0; i < toScore.length; i += 8) {
+    const chunk = toScore.slice(i, i + 8);
+    const settled = await Promise.allSettled(chunk.map((j) => scoreJob(j, brief).then((s) => ({ j, s }))));
+    for (const r of settled) {
+      if (r.status === "fulfilled") scored.push(r.value);
+      else if (!firstError) firstError = String(r.reason?.message || r.reason).slice(0, 200);
+    }
+  }
 
   const fits = scored.map((x) => x.s.fit_score);
   const atLeast = (n) => fits.filter((f) => f >= n).length;
@@ -74,6 +84,7 @@ export async function GET() {
   return NextResponse.json({
     eligiblePool: survivors.length,
     scoredSample: scored.length,
+    firstError,
     thresholdCounts_inSample: { ">=50": atLeast(50), ">=55": atLeast(55), ">=60": atLeast(60), ">=65": atLeast(65) },
     projectedIfWholePoolScored: {
       note: "extrapolated from the sample's qualify-rate across the full eligible pool",
