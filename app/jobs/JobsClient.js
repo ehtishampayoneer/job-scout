@@ -14,9 +14,10 @@ const CHANNEL_LABEL = {
 
 const APPLIED_STATUSES = ["sent", "responded", "interviewing", "rejected", "offer"];
 const LOW_FIT = 45; // roles below this are hidden behind a "show more" toggle
-// Sources whose links ARE the company's own application form (no aggregator
-// middle-man that can gate or paywall the apply step).
-const DIRECT_SOURCES = new Set(["greenhouse", "ashby", "lever", "smartrecruiters"]);
+// The big platforms that force an account (and are where the pay-to-apply /
+// gated flows live). We only skip THESE — email, company websites, company ATS
+// forms and free boards all stay, since those are perfectly good ways to apply.
+const GATED_URL_RE = /linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|monster\.com/i;
 
 export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
   const [tab, setTab] = useState("matches"); // "matches" | "applied"
   const [query, setQuery] = useState("");
   const [showLow, setShowLow] = useState(false);
-  const [directOnly, setDirectOnly] = useState(false);
+  const [hideGated, setHideGated] = useState(false);
   const [dateRange, setDateRange] = useState("all"); // all | today | week
 
   async function runScout(fresh = false) {
@@ -76,7 +77,7 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
   const matchPool = notApplied
     .filter(matchesQuery)
     .filter((r) => (r.fit_score ?? 0) >= minFit)
-    .filter((r) => (directOnly ? DIRECT_SOURCES.has(r.jobs?.source) : true));
+    .filter((r) => (hideGated ? !GATED_URL_RE.test(r.jobs?.url || "") : true));
   const strong = matchPool.filter((r) => (r.fit_score ?? 0) >= LOW_FIT);
   const low = matchPool.filter((r) => (r.fit_score ?? 0) < LOW_FIT);
 
@@ -143,9 +144,9 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
                   <option value={75}>75+</option>
                 </select>
               </label>
-              <label style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} title="Show only roles from company career pages (Greenhouse, Ashby, Lever) where the link is the company's own form — no aggregator that can paywall the apply step">
-                <input type="checkbox" checked={directOnly} onChange={(e) => setDirectOnly(e.target.checked)} />
-                Direct company forms only
+              <label style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} title="Hide roles that route through LinkedIn / Indeed / Glassdoor / ZipRecruiter (account required). Keeps email-apply, company websites, ATS forms and free boards.">
+                <input type="checkbox" checked={hideGated} onChange={(e) => setHideGated(e.target.checked)} />
+                Hide account-gated platforms (LinkedIn, Indeed…)
               </label>
             </div>
 
