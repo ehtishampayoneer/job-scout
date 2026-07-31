@@ -142,6 +142,40 @@ export function ApplyClient({ email }) {
     }
   }
 
+  async function openInGmail() {
+    if (!data) return;
+    const to = toEmail.trim();
+    if (!to) {
+      setError("Add the recipient email first (the hiring/careers address).");
+      return;
+    }
+    const subject = data.application.subject || `Application: ${data.job.title}`;
+    const linksText = (data.profileLinks || []).map((l) => `${l.label}: ${l.url}`).join("\n");
+    const body = `${note}\n\n${linksText ? linksText + "\n\n" : ""}(CV attached)`;
+    // Open the user's own Gmail, pre-filled. They attach the downloaded CV and Send.
+    window.open(gmailComposeUrl({ to, subject, body }), "_blank", "noopener");
+
+    setSending(true);
+    setError("");
+    try {
+      await fetch("/api/apply/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: data.application.id, handoff: true, note_text: note, salary_ask: salary, to_email: to, answers }),
+      });
+      setFlash("Gmail opened. Attach the CV and hit Send — marked as applied.");
+      setTimeout(() => setFlash(""), 3500);
+      if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("job")) {
+        window.history.replaceState({}, "", "/apply");
+      }
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function askQuestion() {
     const q = askQ.trim();
     if (!q || !data) return;
@@ -276,8 +310,8 @@ export function ApplyClient({ email }) {
           <Labeled label="Send to">
             <input className="field" value={toEmail} placeholder="hiring@company.com" onChange={(e) => setToEmail(e.target.value)} />
             {!emailConfigured && (
-              <div style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 6, lineHeight: 1.5 }}>
-                Email sending is not set up yet. Add RESEND_API_KEY and APPLICATION_FROM_EMAIL to send directly from the app.
+              <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 6, lineHeight: 1.5 }}>
+                &ldquo;Open in Gmail &amp; mark applied&rdquo; opens this email in your own Gmail, pre-filled and from your real address. Download the CV above, attach it, and hit Send.
               </div>
             )}
           </Labeled>
@@ -370,14 +404,29 @@ export function ApplyClient({ email }) {
         <div style={{ position: "sticky", bottom: 0, background: "var(--bg)", padding: "14px 0 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--border)", marginTop: 8 }}>
           {alreadyApplied ? (
             <>
-              {/* Already applied: let them re-open the form to finish, WITHOUT
-                  re-marking or advancing the queue. */}
-              {!isEmail && job.url && (
+              {/* Already applied: let them re-open to finish, WITHOUT re-marking. */}
+              {isEmail ? (
+                <button className="btn-primary" style={{ height: 48, padding: "0 22px", fontSize: 15 }} onClick={openInGmail} disabled={sending || !toEmail.trim()}>
+                  Re-open in Gmail ↗
+                </button>
+              ) : job.url ? (
                 <a href={job.url} target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ height: 48, padding: "0 26px", fontSize: 15, display: "inline-flex", alignItems: "center" }}>
                   Re-open form ↗
                 </a>
-              )}
+              ) : null}
               <a href="/jobs" className="btn-ghost" style={{ height: 48, display: "inline-flex", alignItems: "center" }}>Back to jobs</a>
+            </>
+          ) : isEmail ? (
+            <>
+              <button className="btn-primary" style={{ height: 48, padding: "0 22px", fontSize: 15 }} onClick={openInGmail} disabled={sending || !toEmail.trim()}>
+                {sending ? "Working…" : "Open in Gmail & mark applied"}
+              </button>
+              {emailConfigured && (
+                <button className="btn-ghost" style={{ height: 48 }} onClick={send} disabled={sending || !canSend}>Send from app</button>
+              )}
+              <button className="btn-ghost" style={{ height: 48 }} onClick={regenerate} disabled={sending}>Regenerate</button>
+              <button className="btn-ghost" style={{ height: 48 }} onClick={skip} disabled={sending}>Skip</button>
+              {!toEmail.trim() && <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>Add the recipient email above to enable.</span>}
             </>
           ) : (
             <>
@@ -386,13 +435,19 @@ export function ApplyClient({ email }) {
               </button>
               <button className="btn-ghost" style={{ height: 48 }} onClick={regenerate} disabled={sending}>Regenerate</button>
               <button className="btn-ghost" style={{ height: 48 }} onClick={skip} disabled={sending}>Skip</button>
-              {isEmail && !canSend && <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>Add a recipient email to send.</span>}
             </>
           )}
         </div>
       </div>
     </main>
   );
+}
+
+// Build a Gmail web-compose URL pre-filled with the recipient, subject and body.
+// Opens the user's own Gmail so the email sends from their real address.
+function gmailComposeUrl({ to, subject, body }) {
+  const p = new URLSearchParams({ view: "cm", fs: "1", to: to || "", su: subject || "", body: body || "" });
+  return `https://mail.google.com/mail/?${p.toString()}`;
 }
 
 function Labeled({ label, children }) {

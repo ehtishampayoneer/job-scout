@@ -42,6 +42,14 @@ export async function POST(request) {
   const channel = app.jobs?.apply_channel || "login-wall";
   const merged = { ...app, ...patch };
 
+  // Explicit hand-off: the user is finishing the send themselves (opening it in
+  // their own Gmail, or completing a company form). Just record it as applied —
+  // no Resend needed. This is what powers the "Open in Gmail & mark applied" flow.
+  if (body.handoff === true) {
+    await supabase.from("applications").update({ ...patch, status: "sent", sent_at: new Date().toISOString() }).eq("id", appId);
+    return NextResponse.json({ ok: true, handoff: true });
+  }
+
   if (channel === "email-apply") {
     const to = merged.to_email;
     if (!to) return NextResponse.json({ error: "No recipient email was found in this posting. Add one or use the hand-off." }, { status: 422 });
