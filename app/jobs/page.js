@@ -32,11 +32,15 @@ export default async function JobsPage() {
       .eq("user_id", user.id)
       .order("fit_score", { ascending: false })
       .limit(200),
-    supabase.from("applications").select("job_id, status").eq("user_id", user.id),
+    supabase.from("applications").select("job_id, status, sent_at, updated_at").eq("user_id", user.id),
   ]);
 
   const statusByJob = {};
-  for (const a of apps || []) statusByJob[a.job_id] = a.status;
+  const appliedAtByJob = {};
+  for (const a of apps || []) {
+    statusByJob[a.job_id] = a.status;
+    appliedAtByJob[a.job_id] = a.sent_at || a.updated_at || null;
+  }
 
-  return <JobsClient initialRows={rows || []} statusByJob={statusByJob} />;
+  return <JobsClient initialRows={rows || []} statusByJob={statusByJob} appliedAtByJob={appliedAtByJob} />;
 }

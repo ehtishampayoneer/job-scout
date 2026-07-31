@@ -13,13 +13,22 @@ const CHANNEL_LABEL = {
 };
 
 const APPLIED_STATUSES = ["sent", "responded", "interviewing", "rejected", "offer"];
+const LOW_FIT = 45; // roles below this are hidden behind a "show more" toggle
+// Sources whose links ARE the company's own application form (no aggregator
+// middle-man that can gate or paywall the apply step).
+const DIRECT_SOURCES = new Set(["greenhouse", "ashby", "lever", "smartrecruiters"]);
 
-export function JobsClient({ initialRows, statusByJob = {} }) {
+export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} }) {
   const router = useRouter();
   const [rows] = useState(initialRows);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [minFit, setMinFit] = useState(0);
+  const [tab, setTab] = useState("matches"); // "matches" | "applied"
+  const [query, setQuery] = useState("");
+  const [showLow, setShowLow] = useState(false);
+  const [directOnly, setDirectOnly] = useState(false);
+  const [dateRange, setDateRange] = useState("all"); // all | today | week
 
   async function runScout(fresh = false) {
     // Coerce to a real boolean: if a button is ever wired as onClick={runScout},
@@ -49,7 +58,38 @@ export function JobsClient({ initialRows, statusByJob = {} }) {
     }
   }
 
-  const visible = rows.filter((r) => (r.fit_score ?? 0) >= minFit);
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (r) => {
+    if (!q) return true;
+    const j = r.jobs || {};
+    return `${j.title || ""} ${j.company || ""}`.toLowerCase().includes(q);
+  };
+  const isApplied = (r) => APPLIED_STATUSES.includes(statusByJob[r.job_id]);
+
+  // Matches = not yet applied and not skipped. Applied = already submitted.
+  const notApplied = rows.filter((r) => !isApplied(r) && statusByJob[r.job_id] !== "dismissed");
+  const appliedRows = rows
+    .filter(isApplied)
+    .sort((a, b) => new Date(appliedAtByJob[b.job_id] || 0) - new Date(appliedAtByJob[a.job_id] || 0));
+
+  // Matches tab: search + min-fit + direct-only, split into strong vs low-fit.
+  const matchPool = notApplied
+    .filter(matchesQuery)
+    .filter((r) => (r.fit_score ?? 0) >= minFit)
+    .filter((r) => (directOnly ? DIRECT_SOURCES.has(r.jobs?.source) : true));
+  const strong = matchPool.filter((r) => (r.fit_score ?? 0) >= LOW_FIT);
+  const low = matchPool.filter((r) => (r.fit_score ?? 0) < LOW_FIT);
+
+  // Applied tab: search + date range.
+  const now = Date.now();
+  const inRange = (r) => {
+    if (dateRange === "all") return true;
+    const t = new Date(appliedAtByJob[r.job_id] || 0).getTime();
+    if (!t) return false;
+    const days = (now - t) / 86400000;
+    return dateRange === "today" ? days < 1 : days < 7;
+  };
+  const appliedView = appliedRows.filter(matchesQuery).filter(inRange);
 
   return (
     <main style={{ minHeight: "100vh", padding: "22px clamp(12px, 5vw, 48px)" }}>
@@ -68,23 +108,22 @@ export function JobsClient({ initialRows, statusByJob = {} }) {
           </nav>
         </header>
 
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, margin: "0 0 4px" }}>Job matches</h1>
-          {rows.length > 0 && (
-            <label style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 8 }}>
-              Min fit
-              <select className="field" style={{ height: 34, width: "auto", padding: "0 8px" }} value={minFit} onChange={(e) => setMinFit(Number(e.target.value))}>
-                <option value={0}>All</option>
-                <option value={60}>60+</option>
-                <option value={75}>75+</option>
-                <option value={85}>85+</option>
-              </select>
-            </label>
-          )}
+        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, margin: "0 0 12px" }}>Job matches</h1>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <TabBtn active={tab === "matches"} onClick={() => setTab("matches")}>To apply ({notApplied.length})</TabBtn>
+          <TabBtn active={tab === "applied"} onClick={() => setTab("applied")}>Applied ({appliedRows.length})</TabBtn>
         </div>
-        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 16px" }}>
-          Ranked by how well each role fits you. Scout runs automatically every few hours; hit Run scout now to fetch immediately.
-        </p>
+
+        {/* Search */}
+        <input
+          className="field"
+          style={{ marginBottom: 12 }}
+          placeholder="Search by company or job title…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
 
         {note && (
           <div style={{ fontSize: 13, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, color: "var(--fg-muted)" }}>
@@ -92,28 +131,86 @@ export function JobsClient({ initialRows, statusByJob = {} }) {
           </div>
         )}
 
-        {visible.length === 0 ? (
-          <div className="card" style={{ padding: 26, textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
-              {rows.length === 0 ? "No matches yet" : "Nothing at this fit level"}
+        {tab === "matches" ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
+              <label style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 8 }}>
+                Min fit
+                <select className="field" style={{ height: 34, width: "auto", padding: "0 8px" }} value={minFit} onChange={(e) => setMinFit(Number(e.target.value))}>
+                  <option value={0}>All</option>
+                  <option value={45}>45+</option>
+                  <option value={60}>60+</option>
+                  <option value={75}>75+</option>
+                </select>
+              </label>
+              <label style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} title="Show only roles from company career pages (Greenhouse, Ashby, Lever) where the link is the company's own form — no aggregator that can paywall the apply step">
+                <input type="checkbox" checked={directOnly} onChange={(e) => setDirectOnly(e.target.checked)} />
+                Direct company forms only
+              </label>
             </div>
-            <div style={{ fontSize: 13.5, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 460, margin: "0 auto 16px" }}>
-              {rows.length === 0
-                ? "Run the scout to scan RemoteOK, WeWorkRemotely, and company boards for senior remote roles that fit your profile."
-                : "Lower the minimum fit filter, or run the scout again for fresh postings."}
-            </div>
-            {rows.length === 0 && (
-              <button className="btn-primary" onClick={() => runScout(false)} disabled={busy}>
-                {busy ? "Scouting…" : "Run scout now"}
-              </button>
+
+            {strong.length === 0 && low.length === 0 ? (
+              <div className="card" style={{ padding: 26, textAlign: "center" }}>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+                  {rows.length === 0 ? "No matches yet" : "Nothing matches these filters"}
+                </div>
+                <div style={{ fontSize: 13.5, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 460, margin: "0 auto 16px" }}>
+                  {rows.length === 0
+                    ? "Run the scout to scan job boards and company sites for roles that fit your profile."
+                    : "Clear the search, lower the minimum fit, or run the scout again for fresh postings."}
+                </div>
+                {rows.length === 0 && (
+                  <button className="btn-primary" onClick={() => runScout(false)} disabled={busy}>
+                    {busy ? "Scouting…" : "Run scout now"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {strong.map((r) => <JobCard key={r.id} row={r} status={statusByJob[r.job_id]} />)}
+                </div>
+                {low.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <button className="btn-ghost" style={{ height: 36, fontSize: 13 }} onClick={() => setShowLow((v) => !v)}>
+                      {showLow ? "Hide" : `Show ${low.length}`} lower-fit role{low.length === 1 ? "" : "s"} (under {LOW_FIT})
+                    </button>
+                    {showLow && (
+                      <div style={{ display: "grid", gap: 12, marginTop: 12, opacity: 0.9 }}>
+                        {low.map((r) => <JobCard key={r.id} row={r} status={statusByJob[r.job_id]} />)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-          </div>
+          </>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {visible.map((r) => (
-              <JobCard key={r.id} row={r} status={statusByJob[r.job_id]} />
-            ))}
-          </div>
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+              {[["all", "All"], ["today", "Today"], ["week", "This week"]].map(([k, label]) => (
+                <button
+                  key={k}
+                  className="chip"
+                  onClick={() => setDateRange(k)}
+                  style={{ cursor: "pointer", fontWeight: dateRange === k ? 700 : 500, color: dateRange === k ? "var(--fg)" : "var(--fg-muted)", borderColor: dateRange === k ? "var(--fg-muted)" : "var(--border)" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {appliedView.length === 0 ? (
+              <div className="card" style={{ padding: 26, textAlign: "center", color: "var(--fg-muted)", fontSize: 14, lineHeight: 1.6 }}>
+                {appliedRows.length === 0
+                  ? "You haven't applied to any roles yet. Open one from the To apply tab and hit Open form & mark applied."
+                  : "Nothing in this range or search."}
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 12 }}>
+                {appliedView.map((r) => <JobCard key={r.id} row={r} status={statusByJob[r.job_id]} appliedAt={appliedAtByJob[r.job_id]} />)}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
@@ -136,7 +233,36 @@ function regionNote(loc) {
   return null;
 }
 
-function JobCard({ row, status }) {
+function TabBtn({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        height: 36,
+        padding: "0 16px",
+        fontSize: 13.5,
+        fontWeight: 600,
+        borderRadius: 9,
+        cursor: "pointer",
+        border: "1px solid var(--border)",
+        background: active ? "var(--fg)" : "transparent",
+        color: active ? "var(--bg)" : "var(--fg-muted)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function fmtDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+function JobCard({ row, status, appliedAt }) {
   const job = row.jobs || {};
   const fit = row.fit_score ?? 0;
   const trust = row.trust_score ?? 0;
@@ -145,6 +271,7 @@ function JobCard({ row, status }) {
   const found = whenFound(job.first_seen);
   const applied = APPLIED_STATUSES.includes(status);
   const dismissed = status === "dismissed";
+  const appliedLabel = appliedAt ? fmtDate(appliedAt) : null;
 
   return (
     <div className="card" style={{ padding: 18, display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -178,7 +305,9 @@ function JobCard({ row, status }) {
         <div style={{ marginTop: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {applied ? (
             <>
-              <span className="chip" style={{ color: "var(--good)", borderColor: "#a7f3d0", background: "#ecfdf5", fontWeight: 600 }}>✓ Applied</span>
+              <span className="chip" style={{ color: "var(--good)", borderColor: "#a7f3d0", background: "#ecfdf5", fontWeight: 600 }}>
+                ✓ Applied{appliedLabel ? ` · ${appliedLabel}` : ""}
+              </span>
               <Link href={`/apply?job=${job.id}`} style={{ fontSize: 12.5, color: "var(--fg-muted)", fontWeight: 600 }}>View application →</Link>
             </>
           ) : (
