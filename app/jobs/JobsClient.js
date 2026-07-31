@@ -31,26 +31,47 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
   const [hideGated, setHideGated] = useState(false);
   const [dateRange, setDateRange] = useState("all"); // all | today | week
 
-  async function runScout(fresh = false) {
-    // Coerce to a real boolean: if a button is ever wired as onClick={runScout},
-    // `fresh` would be a click Event, and JSON.stringify would throw on the DOM
-    // node's circular references. This guarantees we only ever send true/false.
-    const isFresh = fresh === true;
+  // Scan only — adds new jobs, never deletes. Repeats are prevented server-side.
+  async function runScout() {
     setBusy(true);
-    setNote(isFresh ? "Clearing old matches and rescanning 50+ boards…" : "Scanning job boards and scoring matches…");
+    setNote("Scanning job boards and scoring matches…");
     try {
       const res = await fetch("/api/scout/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fresh: isFresh }),
+        body: JSON.stringify({}),
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || "Scout failed.");
       setNote(
         data.survivors === 0
-          ? "No senior remote roles matched right now. Try again later."
-          : `Scanned ${data.fetched} postings, ${data.survivors} passed filters, scored ${data.scored} (ranked by ${data.ranker || "fit"}). Refreshing…`
+          ? rows.length
+            ? "No new roles this time — your existing matches are below."
+            : "Nothing matched yet. Try again shortly, or widen your profile."
+          : `Scanned ${data.fetched} postings, added ${data.survivors} new, scored ${data.scored}. Refreshing…`
       );
+      router.refresh();
+    } catch (e) {
+      setNote(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Clear only — deletes un-applied matches, does NOT scan. Applied jobs are kept.
+  async function clearJobs() {
+    if (typeof window !== "undefined" && !window.confirm("Clear all un-applied job matches? Your applied jobs are kept. This does NOT scan for new jobs.")) return;
+    setBusy(true);
+    setNote("Clearing matches…");
+    try {
+      const res = await fetch("/api/scout/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearOnly: true }),
+      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error || "Could not clear.");
+      setNote("Cleared. Hit Run scout now to fetch fresh jobs.");
       router.refresh();
     } catch (e) {
       setNote(e.message);
@@ -100,10 +121,10 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
           <nav style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
             <Link href="/apply" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Apply</Link>
-            <button className="btn-ghost" style={{ height: 38 }} onClick={() => runScout(true)} disabled={busy} title="Wipe stale matches and rescan all sources fresh">
-              Clear &amp; rescan
+            <button className="btn-ghost" style={{ height: 38 }} onClick={clearJobs} disabled={busy} title="Delete un-applied matches (does NOT scan). Applied jobs are kept.">
+              Clear
             </button>
-            <button className="btn-primary" style={{ height: 38 }} onClick={() => runScout(false)} disabled={busy}>
+            <button className="btn-primary" style={{ height: 38 }} onClick={runScout} disabled={busy}>
               {busy ? "Scouting…" : "Run scout now"}
             </button>
           </nav>
@@ -161,7 +182,7 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
                     : "Clear the search, lower the minimum fit, or run the scout again for fresh postings."}
                 </div>
                 {rows.length === 0 && (
-                  <button className="btn-primary" onClick={() => runScout(false)} disabled={busy}>
+                  <button className="btn-primary" onClick={runScout} disabled={busy}>
                     {busy ? "Scouting…" : "Run scout now"}
                   </button>
                 )}

@@ -24,18 +24,32 @@ export async function POST(request) {
 
   const body = await request.json().catch(() => ({}));
 
-  try {
-    // Fresh rescan: clear stale, un-actioned matches so the list rebuilds clean
-    // with the current sources/filter/scoring. Jobs you already applied to are kept.
-    if (body.fresh) {
+  // CLEAR ONLY: wipe un-actioned matches WITHOUT scanning (Clear is its own
+  // button now; scanning happens only via Run scout now). Jobs you already
+  // applied to — and their scores — are preserved so your history stays intact.
+  if (body.clearOnly) {
+    try {
       const { data: apps } = await supabase.from("applications").select("job_id").eq("user_id", user.id);
       const keep = (apps || []).map((a) => a.job_id).filter(Boolean);
-      await supabase.from("job_scores").delete().eq("user_id", user.id);
-      let del = supabase.from("jobs").delete().eq("user_id", user.id);
-      if (keep.length) del = del.not("id", "in", `(${keep.join(",")})`);
-      await del;
+      let delScores = supabase.from("job_scores").delete().eq("user_id", user.id);
+      let delJobs = supabase.from("jobs").delete().eq("user_id", user.id);
+      if (keep.length) {
+        const inList = `(${keep.join(",")})`;
+        delScores = delScores.not("job_id", "in", inList);
+        delJobs = delJobs.not("id", "in", inList);
+      }
+      await delScores;
+      await delJobs;
+      return NextResponse.json({ ok: true, cleared: true });
+    } catch (err) {
+      logger.error("scout.clear_failed", { error: String(err?.message || err) });
+      return NextResponse.json({ error: "Could not clear. Try again." }, { status: 500 });
     }
+  }
 
+  try {
+    // Scan only — never deletes. runScoutForUser pre-seeds dedupe from what is
+    // already stored, so a scan only ADDS genuinely new roles (no repeats).
     const result = await runScoutForUser(user.id, supabase, { maxScore: 50 });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
