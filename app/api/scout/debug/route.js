@@ -1,77 +1,72 @@
-// TEMPORARY — probes a large candidate list across all four ATS and returns only
-// the slugs that actually return live jobs, sorted by yield. Delete after use.
+// TEMPORARY metrics run — fetch every source, then measure the funnel:
+// per-source yield, dedup rate, and the qualified pool. Delete after use.
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllSources } from "@/lib/scout/sources";
+import { hardFilter } from "@/lib/scout/filter";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const GREENHOUSE = [
-  // known-good
-  "stripe","datadog","mongodb","cloudflare","elastic","reddit","twilio","gitlab","clickhouse","coinbase",
-  "asana","postman","okta","faire","chime","amplitude","attentive","airtable","launchdarkly","dropbox",
-  "pagerduty","squarespace","calendly","planetscale","circleci","netlify","lattice","airbnb","duolingo","discord","robinhood",
-  // candidates
-  "brex","benchling","samsara","gusto","checkr","flexport","instacart","sofi","grammarly","webflow","vercel","scaleai",
-  "databricks","affirm","pinterest","twitch","lyft","cruise","hashicorp","confluent","snyk","newrelic","retool","rippling",
-  "deel","gong","zapier","loom","miro","box","docusign","sentry","cockroachlabs","dbtlabs","fivetran","hightouch","rudderstack",
-  "canva","atlassian","automattic","doximity","verkada","ironclad","vanta","drata","mercury","remitly","wealthsimple","nubank",
-  "mercadolibre","gojek","grab","coursera","chegg","remotecom","oyster","multiplier","whoop","oura","calm","headspace",
-  "masterclass","ro","hims","cedar","oscar","sourcegraph","render","anyscale","typeform","segment",
-];
-const ASHBY = [
-  // known-good
-  "openai","ramp","linear","replicate","runway","elevenlabs","perplexity","suno","hex","posthog","baseten","modal",
-  "together","fireworks","deepgram","assemblyai","cohere","huggingface","notion","cursor","mistral","harvey","clay",
-  "sierra","glean","braintrust","anyscale","midjourney",
-  // candidates
-  "character","wandb","langchain","pinecone","weaviate","writer","jasper","descript","stability","fal","humanloop",
-  "contextual","tome","gamma","luma","leonardoai","scale","adept","xai","pika","ideogram","lightning","outerbounds",
-  "unstructured","llamaindex","chroma","qdrant","zilliz","patronus","arize","comet","dagster","prefect","astronomer",
-  "mode","deepnote","appsmith","windmill","tinybird","materialize","singlestore","neon","supabase","turso","xata",
-  "railway","flyio","deno","replit","codesandbox","gitpod","coder","raycast","height","shortcut","plane","warp","vercel","ramp",
-];
-const LEVER = [
-  "plaid","leadgenius","kickstarter","eventbrite","quora","gocardless","revolut","monzo","wise","match","upstart",
-  "cargurus","talkdesk","kong","fetch","sourcegraph","replit","voleon","anduril","shieldai","applied-intuition","nuro",
-  "aurora","motional","zoox","embark","kodiak","wayve","pony","netlify","brex","ramp","attentive","lattice","benchling",
-  "mixpanel","segment","twitch","hims","ro","nubank","gopuff","faire",
-];
-const SMARTRECRUITERS = [
-  "Visa","Bosch","Ubisoft","IKEA","Biogen","WeWork","PublicisGroupe","Skechers","AveryDennison","MarleySpoon","Capgemini",
-  "Atos","Siemens","Bayer","Adidas","Allianz","Safran","Orange","Sanofi","Danaher","McDonalds","Experian","Equinix",
-  "Twilio","Square","Deloitte","KPMG","Accenture","Ericsson","Nokia","Spotify","BoozAllen",
-];
-
-async function probe(url, count, timeout = 7000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" }, cache: "no-store" });
-    if (!res.ok) return 0;
-    return count(await res.json());
-  } catch {
-    return 0;
-  } finally {
-    clearTimeout(t);
-  }
-}
-async function testGroup(slugs, urlFn, countFn) {
-  const results = await Promise.all(slugs.map(async (s) => [s, await probe(urlFn(s), countFn)]));
-  const working = results.filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
-  return {
-    workingCount: working.length,
-    totalJobs: working.reduce((a, [, n]) => a + n, 0),
-    slugsCsv: working.map(([s]) => s).join(","),
-    working: Object.fromEntries(working),
-  };
-}
+const USER = "b1c832b0-6714-4ba1-af27-0e935511d1ec";
+const keyOf = (j) => `${j.source}|${String(j.url).toLowerCase()}`;
+const contentKey = (j) => {
+  const co = String(j.company || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const ti = String(j.title || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+  return co && ti ? `${co}|${ti}` : null;
+};
 
 export async function GET() {
-  const [gh, ash, lev, sr] = await Promise.all([
-    testGroup(GREENHOUSE, (s) => `https://boards-api.greenhouse.io/v1/boards/${s}/jobs`, (d) => (d?.jobs || []).length),
-    testGroup(ASHBY, (s) => `https://api.ashbyhq.com/posting-api/job-board/${s}`, (d) => (d?.jobs || []).length),
-    testGroup(LEVER, (s) => `https://api.lever.co/v0/postings/${s}?mode=json`, (d) => (Array.isArray(d) ? d.length : 0)),
-    testGroup(SMARTRECRUITERS, (s) => `https://api.smartrecruiters.com/v1/companies/${s}/postings?limit=100`, (d) => (d?.content || []).length),
-  ]);
-  return NextResponse.json({ greenhouse: gh, ashby: ash, lever: lev, smartrecruiters: sr });
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profile").select("*").eq("user_id", USER).maybeSingle();
+  const queries = (profile.target_roles || []).map((r) => String(r || "").trim()).filter(Boolean).slice(0, 5);
+
+  const t0 = Date.now();
+  const all = await fetchAllSources({ queries });
+  const fetchMs = Date.now() - t0;
+
+  // Per-source RAW counts.
+  const rawBySource = {};
+  for (const j of all) rawBySource[j.source || "?"] = (rawBySource[j.source || "?"] || 0) + 1;
+
+  // Funnel: filter -> url-dedupe -> content-dedupe.
+  let passedFilter = 0, urlDupes = 0, contentDupes = 0;
+  const seen = new Set(), seenContent = new Set();
+  const survivedBySource = {};
+  for (const j of all) {
+    if (!j.url || !j.title || j.title.trim().length < 3) continue;
+    if (!hardFilter(j, profile).pass) continue;
+    passedFilter++;
+    const k = keyOf(j);
+    if (seen.has(k)) { urlDupes++; continue; }
+    const ck = contentKey(j);
+    if (ck && seenContent.has(ck)) { contentDupes++; continue; }
+    seen.add(k);
+    if (ck) seenContent.add(ck);
+    survivedBySource[j.source || "?"] = (survivedBySource[j.source || "?"] || 0) + 1;
+  }
+  const survivors = Object.values(survivedBySource).reduce((a, b) => a + b, 0);
+
+  const top5 = Object.entries(survivedBySource).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // Current qualified inventory already scored in the DB.
+  const { data: scores } = await admin.from("job_scores").select("fit_score").eq("user_id", USER);
+  const qualified = (scores || []).filter((s) => (s.fit_score ?? 0) >= 65).length;
+
+  return NextResponse.json({
+    queries,
+    fetchMs,
+    fetched: all.length,
+    passedFilter,
+    dedupe: {
+      urlDuplicatesRemoved: urlDupes,
+      crossSourceDuplicatesRemoved: contentDupes,
+      dedupRatePct: passedFilter ? Math.round(((urlDupes + contentDupes) / passedFilter) * 100) : 0,
+      survivors,
+    },
+    rawBySource: Object.fromEntries(Object.entries(rawBySource).sort((a, b) => b[1] - a[1])),
+    survivedBySource: Object.fromEntries(Object.entries(survivedBySource).sort((a, b) => b[1] - a[1])),
+    top5SourcesByYield: top5,
+    currentQualifiedInventory: qualified,
+  });
 }
