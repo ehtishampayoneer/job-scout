@@ -50,6 +50,7 @@ export function BountiesClient({ initialBounties, email }) {
           <Brand />
           <nav style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/jobs" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Job matches</Link>
+            <Link href="/research" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Research</Link>
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
             <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{email}</span>
           </nav>
