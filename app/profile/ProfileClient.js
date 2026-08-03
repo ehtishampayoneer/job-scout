@@ -126,6 +126,7 @@ export function ProfileClient({ initialProfile, initialProjects, initialEmployme
             <a href="/jobs" className="btn-primary" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Job matches</a>
             <a href="/bounties" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Bounties</a>
             <a href="/research" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Research</a>
+            <a href="/tasks" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Tasks</a>
             <span style={{ fontSize: 12.5, color: "var(--fg-subtle)", margin: "0 4px" }}>{email}</span>
             <button className="btn-ghost" style={{ height: 38 }} onClick={signOut}>Sign out</button>
           </div>

@@ -43,6 +43,7 @@ export function ResearchClient({ platforms, email }) {
           <nav style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/jobs" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Job matches</Link>
             <Link href="/bounties" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Bounties</Link>
+            <Link href="/tasks" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Tasks</Link>
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
             <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{email}</span>
           </nav>

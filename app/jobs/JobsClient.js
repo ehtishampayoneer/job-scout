@@ -122,6 +122,7 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
             <Link href="/bounties" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Bounties</Link>
             <Link href="/research" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Research</Link>
+            <Link href="/tasks" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Tasks</Link>
             <Link href="/apply" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Apply</Link>
             <button className="btn-ghost" style={{ height: 38 }} onClick={clearJobs} disabled={busy} title="Delete un-applied matches (does NOT scan). Applied jobs are kept.">
               Clear
