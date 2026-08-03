@@ -42,6 +42,37 @@ export function ProfileClient({ initialProfile, initialProjects, initialEmployme
     setP((cur) => ({ ...cur, [field]: value }));
   }
 
+  // Conversational profile edits: "add Python to my skills", "change my target
+  // roles", "I now need visa sponsorship". Applies + saves, updates the view.
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatReplies, setChatReplies] = useState([]);
+  async function updateByChat() {
+    const msg = chatInput.trim();
+    if (!msg || chatBusy) return;
+    setChatBusy(true);
+    try {
+      const res = await fetch("/api/profile/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: msg,
+          history: chatReplies.flatMap((c) => [{ role: "user", content: c.q }, { role: "assistant", content: c.reply }]),
+        }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "Could not update.");
+      if (out.patch && Object.keys(out.patch).length) setP((cur) => ({ ...cur, ...out.patch }));
+      setChatReplies((prev) => [...prev, { q: msg, reply: out.reply }]);
+      setChatInput("");
+      router.refresh();
+    } catch (e) {
+      setChatReplies((prev) => [...prev, { q: msg, reply: "⚠️ " + e.message }]);
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   async function save() {
     setBusy(true);
     setNote("");
@@ -97,6 +128,33 @@ export function ProfileClient({ initialProfile, initialProjects, initialEmployme
             <button className="btn-ghost" style={{ height: 38 }} onClick={signOut}>Sign out</button>
           </div>
         </header>
+
+        {/* Update by chat */}
+        <div className="card" style={{ padding: 18, marginBottom: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Update your profile by chat</div>
+          <div style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+            Just tell Job Scout what to change — e.g. &ldquo;add Figma to my skills&rdquo;, &ldquo;change my target roles to Head of Product and VP Product&rdquo;, &ldquo;I now need visa sponsorship&rdquo;, &ldquo;make my summary shorter&rdquo;.
+          </div>
+          {chatReplies.map((c, i) => (
+            <div key={i} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>You: {c.q}</div>
+              <div style={{ fontSize: 13.5, marginTop: 2 }}>{c.reply}</div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              className="field"
+              style={{ flex: 1, minWidth: 220 }}
+              placeholder="Tell Job Scout what to change…"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") updateByChat(); }}
+            />
+            <button className="btn-primary" style={{ height: 46 }} onClick={updateByChat} disabled={chatBusy || !chatInput.trim()}>
+              {chatBusy ? "Updating…" : "Update"}
+            </button>
+          </div>
+        </div>
 
         {/* Public microsite */}
         <div className="card" style={{ padding: 18, marginBottom: 20, background: pubEnabled ? "var(--accent-soft)" : "var(--surface)", borderColor: pubEnabled ? "#c7d2fe" : "var(--border)" }}>
