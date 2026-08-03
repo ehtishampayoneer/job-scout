@@ -57,9 +57,12 @@ export function BountiesClient({ initialBounties, email }) {
         </header>
 
         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, margin: "0 0 4px" }}>Bounties</h1>
-        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 16px", lineHeight: 1.5 }}>
-          Paid tasks with the money <strong>already committed</strong>. Open any one and Job Scout explains it in plain English, writes you a winning proposal, and helps you do it. You submit and claim on the source.
+        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 10px", lineHeight: 1.5 }}>
+          Tasks with the reward <strong>already committed</strong> — but be clear: these are <strong>competitive</strong> (the best submission wins). Your edge is our AI: it explains the task, writes you a <strong>winning proposal</strong>, and does most of the work so you can actually win it.
         </p>
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", marginBottom: 16, lineHeight: 1.5 }}>
+          Want <strong>do-a-task → get-paid, no competition</strong>? That&apos;s the <Link href="/research" style={{ color: "var(--accent)", fontWeight: 600 }}>Research &amp; Expert Calls</Link> tab — you get paid for studies and calls once you&apos;re matched, no competing.
+        </div>
 
         <input
           className="field"
