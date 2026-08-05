@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { loadCandidate } from "@/lib/apply/context";
 import { generateApplication } from "@/lib/apply/generate";
+import { fetchJobDescription } from "@/lib/apply/jobtext";
 import { classifyChannel } from "@/lib/scout/classify";
 import { hasAnyProvider, AllProvidersFailedError } from "@/lib/ai-router";
 import { logger } from "@/lib/log";
@@ -39,7 +40,9 @@ export async function POST(request) {
     const job = score.jobs;
     const ch = classifyChannel(job);
     const profile = { ...cand.profile, contact_email: cand.profile.contact_email || user.email };
-    const gen = await generateApplication({ job, score, profile, projects: cand.projects, employment: cand.employment, education: cand.education });
+    const fullText = await fetchJobDescription(job);
+    const jobForGen = fullText && fullText.length > (job.raw_text || "").length ? { ...job, raw_text: fullText } : job;
+    const gen = await generateApplication({ job: jobForGen, score, profile, projects: cand.projects, employment: cand.employment, education: cand.education });
     await supabase.from("applications").upsert(
       {
         user_id: user.id,

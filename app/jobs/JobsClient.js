@@ -120,9 +120,6 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
           <Brand />
           <nav style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Link href="/profile" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Profile</Link>
-            <Link href="/bounties" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Bounties</Link>
-            <Link href="/research" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Research</Link>
-            <Link href="/tasks" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Tasks</Link>
             <Link href="/apply" className="btn-ghost" style={{ height: 38, display: "inline-flex", alignItems: "center" }}>Apply</Link>
             <button className="btn-ghost" style={{ height: 38 }} onClick={clearJobs} disabled={busy} title="Delete un-applied matches (does NOT scan). Applied jobs are kept.">
               Clear
@@ -242,12 +239,15 @@ export function JobsClient({ initialRows, statusByJob = {}, appliedAtByJob = {} 
   );
 }
 
+// When this job entered YOUR list — honestly labelled "added", NOT "posted".
+// We don't know the original posting date (company boards list all open roles,
+// some months old), so we never imply a job is freshly posted.
 function whenFound(ts) {
   if (!ts) return "";
   const days = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
-  if (days <= 0) return "found today";
-  if (days === 1) return "found 1 day ago";
-  return `found ${days} days ago`;
+  if (days <= 0) return "added to your list today";
+  if (days === 1) return "added yesterday";
+  return `added ${days}d ago`;
 }
 // Flag roles that look region-restricted (US-only etc.) — matters when applying from abroad.
 function regionNote(loc) {

@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { loadCandidate, TERMINAL_STATUSES } from "@/lib/apply/context";
 import { generateApplication } from "@/lib/apply/generate";
+import { fetchJobDescription } from "@/lib/apply/jobtext";
 import { classifyChannel } from "@/lib/scout/classify";
 import { hasAnyProvider, AllProvidersFailedError } from "@/lib/ai-router";
 import { emailConfigured } from "@/lib/email/resend";
@@ -92,7 +93,11 @@ export async function GET(request) {
         const links = Array.isArray(candProfile.links) ? candProfile.links : [];
         if (!links.some((l) => l.url === micrositeUrl)) candProfile.links = [{ label: "Portfolio", url: micrositeUrl }, ...links];
       }
-      const gen = await generateApplication({ job, score: top, profile: candProfile, projects, employment, education, micrositeUrl });
+      // Fetch the FULL job description now (scanning stores it content-light) so
+      // the CV, note, and answers actually match this job's real requirements.
+      const fullText = await fetchJobDescription(job);
+      const jobForGen = fullText && fullText.length > (job.raw_text || "").length ? { ...job, raw_text: fullText } : job;
+      const gen = await generateApplication({ job: jobForGen, score: top, profile: candProfile, projects, employment, education, micrositeUrl });
       const { data: saved, error } = await supabase
         .from("applications")
         .upsert(
